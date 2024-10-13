@@ -4,6 +4,8 @@ import android.content.Intent;
 import android.os.Bundle;
 import android.widget.Toast;
 
+import androidx.activity.result.ActivityResultLauncher;
+import androidx.activity.result.contract.ActivityResultContracts;
 import androidx.appcompat.app.AppCompatActivity;
 import androidx.lifecycle.ViewModelProvider;
 import androidx.recyclerview.widget.LinearLayoutManager;
@@ -14,9 +16,19 @@ import com.google.android.material.floatingactionbutton.FloatingActionButton;
 
 public class MainActivity extends AppCompatActivity {
 
-    public static final int NEW_WORD_ACTIVITY_REQUEST_CODE = 1;
+    private WordViewModel wordViewModel;
 
-    private WordViewModel mWordViewModel;
+    private final ActivityResultLauncher<Intent> addWordLauncher =
+            registerForActivityResult(new ActivityResultContracts.StartActivityForResult(), result -> {
+                if (result.getResultCode() == RESULT_OK && result.getData() != null) {
+                    String newWord = result.getData().getStringExtra(NewWordActivity.EXTRA_REPLY);
+                    if (newWord != null) {
+                        wordViewModel.insert(new Word(newWord));
+                    }
+                } else {
+                    Toast.makeText(getApplicationContext(), R.string.empty_not_saved, Toast.LENGTH_LONG).show();
+                }
+            });
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -28,35 +40,15 @@ public class MainActivity extends AppCompatActivity {
         recyclerView.setAdapter(adapter);
         recyclerView.setLayoutManager(new LinearLayoutManager(this));
 
-        // Get a new or existing ViewModel from the ViewModelProvider.
-        mWordViewModel = new ViewModelProvider(this).get(WordViewModel.class);
+        wordViewModel = new ViewModelProvider(this).get(WordViewModel.class);
 
-        // Add an observer on the LiveData returned by getAlphabetizedWords.
-        // The onChanged() method fires when the observed data changes and the activity is
-        // in the foreground.
-        mWordViewModel.getAllWords().observe(this, words -> {
-            // Update the cached copy of the words in the adapter.
-            adapter.submitList(words);
-        });
+        wordViewModel.getAllWords().observe(this, adapter::submitList);
 
         FloatingActionButton fab = findViewById(R.id.fab);
         fab.setOnClickListener(view -> {
             Intent intent = new Intent(MainActivity.this, NewWordActivity.class);
-            startActivityForResult(intent, NEW_WORD_ACTIVITY_REQUEST_CODE);
+            addWordLauncher.launch(intent);
         });
     }
 
-    public void onActivityResult(int requestCode, int resultCode, Intent data) {
-        super.onActivityResult(requestCode, resultCode, data);
-
-        if (requestCode == NEW_WORD_ACTIVITY_REQUEST_CODE && resultCode == RESULT_OK) {
-            Word word = new Word(data.getStringExtra(NewWordActivity.EXTRA_REPLY));
-            mWordViewModel.insert(word);
-        } else {
-            Toast.makeText(
-                    getApplicationContext(),
-                    R.string.empty_not_saved,
-                    Toast.LENGTH_LONG).show();
-        }
-    }
 }
